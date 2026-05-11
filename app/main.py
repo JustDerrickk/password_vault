@@ -1,9 +1,11 @@
 from pathlib import Path
 from getpass import getpass
 import bcrypt
+import sqlite3
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 MASTER_HASH_FILE = DATA_DIR / "master.hash"
+DB_FILE = DATA_DIR / "passwords.db"
 
 def setup_master_password():
     print("Premier lancement de Password vault. Veuillez configurer votre mot de passe maître.")
@@ -31,12 +33,28 @@ def verify_master_password(stored_hash: bytes):
     password = getpass("Mot de passe maître : ").strip()
     return bcrypt.checkpw(password.encode("utf-8"), stored_hash)
 
+def init_db():
+    DATA_DIR.mkdir(exist_ok=True)
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS passwords (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        service TEXT NOT NULL,
+        username TEXT NOT NULL,
+        password TEXT NOT NULL
+    )""")
+    conn.commit()
+    conn.close()
+
+
 def main():
     print("Bienvenue sur Password Vault")
     stored_hash = load_or_create_master_hash()
 
     if verify_master_password(stored_hash):
         print("Accès autorisé")
+        init_db()
     else:
         print("Mot de passe maître incorrect")
 

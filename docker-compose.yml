@@ -1,9 +1,0 @@
-services:
-  app:
-    build: .
-    container_name: password_vault
-    stdin_open: true   
-    tty: true        
-    volumes:
-      - ./data:/data
-    restart: no
