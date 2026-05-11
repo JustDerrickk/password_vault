@@ -47,6 +47,27 @@ def init_db():
     conn.commit()
     conn.close()
 
+def add_password(service, username, encrypted_password):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO passwords (service, username, password) VALUES (?, ?, ?)", (service, username, encrypted_password))
+    conn.commit()
+    conn.close()
+
+def get_all_passwords():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, service, username, password FROM passwords")
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+def delete_password(entry_id):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM passwords WHERE id = ?", (entry_id,))
+    conn.commit()
+    conn.close()
 
 def main():
     print("Bienvenue sur Password Vault")
