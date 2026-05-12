@@ -1,11 +1,20 @@
-from pathlib import Path
+from base64 import urlsafe_b64encode
 from getpass import getpass
-import bcrypt
+from pathlib import Path
 import sqlite3
+
+import os
+import bcrypt
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 MASTER_HASH_FILE = DATA_DIR / "master.hash"
 DB_FILE = DATA_DIR / "passwords.db"
+SALT_FILE = DATA_DIR / "salt.bin"
 
 def setup_master_password():
     print("Premier lancement de Password vault. Veuillez configurer votre mot de passe maître.")
@@ -46,6 +55,23 @@ def init_db():
     )""")
     conn.commit()
     conn.close()
+
+def load_or_create_salt() -> bytes:
+    DATA_DIR.mkdir(exist_ok=True)
+    if not SALT_FILE.exists() or SALT_FILE.stat().st_size == 0:
+        salt = os.urandom(16)
+        SALT_FILE.write_bytes(salt)
+        return salt
+    return SALT_FILE.read_bytes()
+
+def derive_key(master_password: str, salt: bytes) -> bytes:
+    kdf=PBKDF2HMAC(algorithm=hashes.SHA256(),length=32,salt=salt,iterations=390000,)
+    return urlsafe_b64encode(kdf.derive(master_password.encode("utf-8")))
+
+def build_fernet(master_password: str) -> Fernet:
+    salt = load_or_create_salt()
+    key = derive_key(master_password, salt)
+    return Fernet(key)
 
 def add_password(service, username, encrypted_password):
     conn = sqlite3.connect(DB_FILE)
