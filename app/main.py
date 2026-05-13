@@ -38,9 +38,11 @@ def load_or_create_master_hash():
         return setup_master_password()
     return MASTER_HASH_FILE.read_bytes().strip()
 
-def verify_master_password(stored_hash: bytes):
+def verify_master_password(stored_hash):
     password = getpass("Mot de passe maître : ").strip()
-    return bcrypt.checkpw(password.encode("utf-8"), stored_hash)
+    if bcrypt.checkpw(password.encode("utf-8"), stored_hash):
+        return password
+    return None
 
 def init_db():
     DATA_DIR.mkdir(exist_ok=True)
@@ -64,31 +66,46 @@ def load_or_create_salt() -> bytes:
         return salt
     return SALT_FILE.read_bytes()
 
-def derive_key(master_password: str, salt: bytes) -> bytes:
+def derive_key(master_password, salt):
     kdf=PBKDF2HMAC(algorithm=hashes.SHA256(),length=32,salt=salt,iterations=390000,)
     return urlsafe_b64encode(kdf.derive(master_password.encode("utf-8")))
 
-def build_fernet(master_password: str) -> Fernet:
+def build_fernet(master_password) -> Fernet:
     salt = load_or_create_salt()
     key = derive_key(master_password, salt)
     return Fernet(key)
 
-def add_password(service, username, encrypted_password):
+def encrypt_password(plain_password, fernet):
+    token = fernet.encrypt(plain_password.encode("utf-8"))
+    return token.decode("utf-8")
+
+def decrypt_password(token, fernet):
+    plain = fernet.decrypt(token.encode("utf-8"))
+    return plain.decode("utf-8")
+
+def add_password(site, username, password, fernet):
+    encrypted = encrypt_password(password, fernet)
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO passwords (service, username, password) VALUES (?, ?, ?)", (service, username, encrypted_password))
+    cursor.execute("INSERT INTO passwords (service, username, password) VALUES (?, ?, ?)",(site, username, encrypted),)
     conn.commit()
     conn.close()
 
-def get_all_passwords():
+def get_all_passwords(fernet):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("SELECT id, service, username, password FROM passwords")
     rows = cursor.fetchall()
     conn.close()
-    return rows
 
-def delete_password(entry_id):
+    result = []
+    for row in rows:
+        entry_id, service, username, encrypted = row
+        decrypted = decrypt_password(encrypted, fernet)
+        result.append((entry_id, service, username, decrypted))
+    return result
+
+def delete_password(entry_id, fernet):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM passwords WHERE id = ?", (entry_id,))
@@ -98,12 +115,20 @@ def delete_password(entry_id):
 def main():
     print("Bienvenue sur Password Vault")
     stored_hash = load_or_create_master_hash()
+    master_password = verify_master_password(stored_hash)
 
-    if verify_master_password(stored_hash):
-        print("Accès autorisé")
-        init_db()
-    else:
+    if not master_password:
         print("Mot de passe maître incorrect")
+        return
+
+    init_db()
+    fernet = build_fernet(master_password)
+
+    # TEST rapide
+    add_password("github.com", "test", "pswd", fernet)
+    rows = get_all_passwords(fernet)
+    for entry in rows:
+        print(entry)
 
 if __name__ == "__main__":
     main()
