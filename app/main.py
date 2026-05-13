@@ -124,11 +124,70 @@ def main():
     init_db()
     fernet = build_fernet(master_password)
 
-    # TEST rapide
-    add_password("github.com", "test", "pswd", fernet)
-    rows = get_all_passwords(fernet)
-    for entry in rows:
-        print(entry)
+    while True:
+        print("\n1. Ajouter un mot de passe")
+        print("2. Lister les entrees")
+        print("3. Afficher un mot de passe")
+        print("4. Supprimer une entree")
+        print("0. Quitter")
+
+        choice = input("Choix : ").strip()
+
+        if choice == "0":
+            print("Au revoir.")
+            return
+
+        if choice == "1":
+            service = input("Service : ").strip()
+            username = input("Identifiant : ").strip()
+            password = getpass("Mot de passe : ")
+            if not service or not username or not password:
+                print("Champs obligatoires manquants.")
+                continue
+            add_password(service, username, password, fernet)
+            print("Entree ajoutee.")
+            continue
+
+        if choice == "2":
+            rows = get_all_passwords(fernet)
+            if not rows:
+                print("Aucune entree.")
+                continue
+            print("ID | Service | Identifiant | Mot de passe")
+            for entry_id, service, username, password in rows:
+                print(f"{entry_id} | {service} | {username} | {password}")
+            continue
+
+        if choice == "3":
+            raw_id = input("ID : ").strip()
+            try:
+                entry_id = int(raw_id)
+            except ValueError:
+                print("ID invalide.")
+                continue
+            rows = get_all_passwords(fernet)
+            entry = next((row for row in rows if row[0] == entry_id), None)
+            if not entry:
+                print("ID introuvable.")
+                continue
+            entry_id, service, username, password = entry
+            print(f"Service : {service}")
+            print(f"Identifiant : {username}")
+            print(f"Mot de passe : {password}")
+            continue
+
+        if choice == "4":
+            raw_id = input("ID : ").strip()
+            try:
+                entry_id = int(raw_id)
+            except ValueError:
+                print("ID invalide.")
+                continue
+            delete_password(entry_id, fernet)
+            print("Suppression terminee.")
+            continue
+
+        print("Choix invalide.")
 
 if __name__ == "__main__":
     main()
